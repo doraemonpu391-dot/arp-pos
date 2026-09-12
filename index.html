@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<!-- 加入主畫面後以全螢幕 App 方式運作 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="北流POS">
+<meta name="theme-color" content="#1a1616">
+<title>北流市集 POS</title>
+<style>
+  :root{
+    --bg:#1a1616; --surface:#241f1f; --surface2:#2e2827; --line:#3a3230;
+    --text:#f4efe6; --muted:#a99f96; --brand:#c25a54; --gold:#f2d98c;
+    --teal:#6fb3b6; --green:#93c97f; --danger:#e06a5f;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,"PingFang TC","Helvetica Neue",Arial,sans-serif;font-size:16px}
+  body{padding-bottom:80px}
+  h1,h2,h3{margin:0 0 .4em}
+  button{font-family:inherit;font-size:1rem;cursor:pointer;border:none;border-radius:10px;
+    padding:12px 14px;background:var(--surface2);color:var(--text);white-space:nowrap}
+  button:active{transform:scale(.97)}
+  .btn-primary{background:var(--brand);color:#fff;font-weight:700}
+  .btn-gold{background:var(--gold);color:#332}
+  .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+  .btn-sm{padding:7px 10px;font-size:.85rem;border-radius:8px}
+  input,select,textarea{font-family:inherit;font-size:16px;background:var(--surface2);
+    color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%}
+  label{display:block;font-size:.8rem;color:var(--muted);margin:0 0 4px}
+  .wrap{max-width:760px;margin:0 auto;padding:14px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin:0 0 12px}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .row>*{flex:1;min-width:0}
+  .muted{color:var(--muted)} .gold{color:var(--gold)} .brand{color:var(--brand)}
+  .small{font-size:.8rem} .big{font-size:1.6rem;font-weight:800}
+  .pill{display:inline-block;font-size:.72rem;padding:2px 8px;border-radius:99px;background:var(--surface2);color:var(--muted)}
+  .pill.warn{background:#4a2f2c;color:var(--gold)}
+  header.top{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line);
+    padding:10px 14px;display:flex;align-items:center;gap:10px}
+  header.top .role{font-size:.75rem;padding:3px 8px;border-radius:99px}
+  .role.owner{background:var(--brand);color:#fff} .role.helper{background:var(--teal);color:#12201f}
+  nav.tabs{position:fixed;bottom:0;left:0;right:0;z-index:20;display:flex;background:var(--surface);
+    border-top:1px solid var(--line)}
+  nav.tabs button{flex:1;background:transparent;border-radius:0;padding:10px 4px;font-size:.72rem;color:var(--muted);
+    display:flex;flex-direction:column;align-items:center;gap:3px}
+  nav.tabs button .ic{font-size:1.15rem}
+  nav.tabs button.active{color:var(--gold)}
+  .list-item{display:flex;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid var(--line)}
+  .list-item:last-child{border-bottom:none}
+  .grow{flex:1;min-width:0}
+  .ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .code-tag{font-variant-numeric:tabular-nums;font-weight:800;color:var(--teal);min-width:56px}
+  .price{font-weight:800;color:var(--gold);white-space:nowrap}
+  .cost{font-size:.78rem;color:var(--muted);white-space:nowrap}
+  .hide{display:none!important}
+  .center{text-align:center}
+  .stat{background:var(--surface2);border-radius:12px;padding:12px;text-align:center}
+  .stat .n{font-size:1.5rem;font-weight:800}
+  .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--green);color:#12200f;
+    padding:12px 20px;border-radius:12px;font-weight:700;z-index:50;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  .cart-line{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px dashed var(--line)}
+  .divider{height:1px;background:var(--line);margin:10px 0}
+  .searchbar{position:sticky;top:52px;background:var(--bg);z-index:10;padding:8px 0}
+  .quickgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .result{display:flex;align-items:center;gap:10px;padding:12px 8px;border-bottom:1px solid var(--line);cursor:pointer}
+  .result:active{background:var(--surface2)}
+  @media (max-width:420px){ .code-tag{min-width:48px} }
+</style>
+</head>
+<body>
+
+<header class="top hide" id="chrome">
+  <strong style="flex:1">北流市集 POS</strong>
+  <span id="roleLabel" class="role owner">—</span>
+</header>
+<div id="app"></div>
+<nav class="tabs hide" id="tabs"></nav>
+<div class="toast" id="toast"></div>
+
+<!-- ===================== 純邏輯（可被 Node 測試抽出） ===================== -->
+<script id="pos-core">
+(function(g){
+  function num(v){ if(v===''||v==null) return 0; var n=Number(String(v).replace(/[,\s]/g,'')); return isFinite(n)?n:0; }
+  // 成本：空字串/null 代表「未知」，回傳 null（不可當 0，否則虛報毛利）
+  function costOf(v){ if(v===''||v==null) return null; var n=Number(String(v).replace(/[,\s]/g,'')); return isFinite(n)?n:null; }
+
+  // 從 CD 管理系統 data.json 讀出商品（只讀，不回寫）
+  // 只帶「在售」；保留中(已有人要)、已售出、已下架一律不匯入販售
+  function parseDataJson(obj){
+    var L = (obj && obj.listings) || [];
+    return L.filter(function(l){ return l.status==='在售'||l.status==='保留中'; }).map(function(l){
+      return {
+        srcId: l.id||'',
+        artist: (l.artist||'').trim(),
+        album: (l.album||'').trim(),
+        version: (l.notes||'').trim(),       // 版本提示，可再編輯
+        price: num(l.price),
+        cost: costOf(l.cost),                // null = 未知
+        status: l.status||'',
+        include: (l.status==='在售')         // 只有在售預設勾選；保留中匯入但不勾(不拿去賣)
+      };
+    });
+  }
+
+  function pad3(x){ return String(x).padStart(3,'0'); }
+  function maxCodeNum(items, prefix){
+    var esc = prefix.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    var re = new RegExp('^'+esc+'(\\d+)$'), max=0;
+    (items||[]).forEach(function(it){ if(it.code){ var m=String(it.code).match(re); if(m){ var v=+m[1]; if(v>max) max=v; } } });
+    return max;
+  }
+
+  // 指派編號（只處理要帶去 include 的商品）：
+  //  force=true  → 全部重新連號（印標籤前想重來用，會蓋掉舊號）
+  //  force 省略  → 只補「未編號」的，給目前最大號+1；已編號的一律保留、不覆蓋、不撞號
+  function assignCodes(items, prefix, force){
+    prefix = prefix||'A';
+    if(force){
+      var n=0;
+      return items.map(function(it){
+        if(it.include===false) return Object.assign({},it);
+        n++; return Object.assign({}, it, {code: prefix + pad3(n)});
+      });
+    }
+    var max = maxCodeNum(items, prefix);
+    return items.map(function(it){
+      if(it.include===false) return Object.assign({},it);
+      if(it.code && String(it.code).trim()) return Object.assign({},it);   // 已編號→保留
+      max++; return Object.assign({}, it, {code: prefix + pad3(max)});     // 未編號→補下一個號
+    });
+  }
+
+  // 匯入合併：只加入 srcId 尚未存在的新商品；既有商品(含其編號與編輯)完全保留
+  function mergeImport(existing, incoming){
+    existing = existing||[]; incoming = incoming||[];
+    var have={}; existing.forEach(function(i){ if(i.srcId) have[i.srcId]=1; });
+    var add = incoming.filter(function(p){ return !p.srcId || !have[p.srcId]; });
+    return { items: existing.concat(add), added: add.length, skipped: incoming.length - add.length };
+  }
+
+  function calcCart(lines){ return (lines||[]).reduce(function(s,l){return s+num(l.price);},0); }
+
+  // 組合價「任選 N 張 = Y 元」：貴的優先成組，剩下的照單價
+  function bundleDiscount(lines, N, Y){
+    N=num(N); Y=num(Y);
+    if(N<1 || !lines || lines.length<N) return 0;
+    var prices = lines.map(function(l){return num(l.price);}).sort(function(a,b){return b-a;});
+    var groups = Math.floor(prices.length / N);
+    if(groups<1) return 0;
+    var covered = prices.slice(0, groups*N).reduce(function(s,p){return s+p;},0);
+    return Math.max(0, covered - groups*Y);
+  }
+
+  // 折扣：type = amount(折抵金額) | percent(打X折,value=折數) | setTotal(直接改總額) | bundle(任選N張Y元)
+  function applyDiscount(subtotal, lines, disc){
+    subtotal = num(subtotal); var amount=0;
+    if(disc){
+      if(disc.type==='amount') amount = num(disc.value);
+      else if(disc.type==='percent'){ var v=num(disc.value); if(v>0 && v<10) amount = subtotal*(1 - v/10); }
+      else if(disc.type==='setTotal') amount = subtotal - num(disc.value);
+      else if(disc.type==='bundle') amount = bundleDiscount(lines, disc.n, disc.y);
+    }
+    amount = Math.max(0, Math.min(amount, subtotal));   // 夾住：不為負、不超過小計
+    return { amount:amount, total: Math.max(0, subtotal - amount) };
+  }
+
+  // 已售編號集合：出現在任何訂單裡的編號(空號不計)。收銀據此排除，避免同一張賣兩次
+  function soldCodes(orders){
+    var set={};
+    (orders||[]).forEach(function(o){ (o.lines||[]).forEach(function(ln){ if(ln.code) set[ln.code]=true; }); });
+    return set;
+  }
+
+  // 幫手包：絕不含成本。過濾出要帶的商品，只給 code/artist/album/version/price
+  function buildHelperPackage(items, presets, quick){
+    return {
+      kind:'helper-package', v:1, ts:Date.now(),
+      items:(items||[]).filter(function(it){return it.include!==false && it.code;}).map(function(it){
+        return { code:it.code, artist:it.artist, album:it.album, version:it.version||'', price:num(it.price) };
+      }),
+      presets: (presets||[]).map(function(p){return {label:p.label,type:p.type,value:num(p.value),n:num(p.n),y:num(p.y)};}),
+      quick: (quick||[]).map(function(q){ return {label:q.label, price:num(q.price)}; }) // 不帶 cost
+    };
+  }
+
+  // 會計：訂單 join 商品成本(依編號)。成本未知者不計入成本，但計數回報，避免虛報毛利
+  function computeAccounting(orders, catalogByCode){
+    catalogByCode = catalogByCode||{};
+    var revenue=0, knownCost=0, unknownCount=0, sold=0, byDay={};
+    (orders||[]).forEach(function(o){
+      var t=num(o.total); revenue+=t;
+      var d=o.day||'其他';
+      byDay[d]=byDay[d]||{revenue:0,orders:0,items:0};
+      byDay[d].revenue+=t; byDay[d].orders+=1;
+      (o.lines||[]).forEach(function(ln){
+        sold++; byDay[d].items++;
+        var c=null;
+        if(ln.code && catalogByCode[ln.code] && catalogByCode[ln.code].cost!=null) c=num(catalogByCode[ln.code].cost);
+        else if(ln.cost!=null && ln.cost!=='') c=num(ln.cost);   // 快速品項可帶老闆設定成本
+        if(c==null) unknownCount++; else knownCost+=c;
+      });
+    });
+    var profit=revenue-knownCost;
+    return { revenue:revenue, knownCost:knownCost, profit:profit,
+      margin: revenue>0?profit/revenue:0, orders:(orders||[]).length,
+      itemsSold:sold, unknownCostCount:unknownCount, byDay:byDay };
+  }
+
+  g.POS = { num:num, costOf:costOf, parseDataJson:parseDataJson, assignCodes:assignCodes,
+    maxCodeNum:maxCodeNum, mergeImport:mergeImport, calcCart:calcCart, bundleDiscount:bundleDiscount,
+    applyDiscount:applyDiscount, soldCodes:soldCodes, buildHelperPackage:buildHelperPackage, computeAccounting:computeAccounting };
+})(typeof globalThis!=='undefined'?globalThis:this);
+</script>
+
+<!-- ===================== 介面 ===================== -->
+<script id="pos-ui">
+if (typeof document !== 'undefined') {
+(function(){
+  var P = globalThis.POS;
+  var OWNER_KEY='nlpos_owner', HELPER_KEY='nlpos_helper', ROLE_KEY='nlpos_role';
+
+  function ls(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } }
+  function save(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){ alert('儲存失敗：'+e.message); } }
+  function el(tag,attrs,kids){ var e=document.createElement(tag); attrs=attrs||{};
+    for(var k in attrs){ if(k==='class')e.className=attrs[k]; else if(k==='text')e.textContent=attrs[k];
+      else if(k==='html')e.innerHTML=attrs[k]; else if(k.slice(0,2)==='on')e.addEventListener(k.slice(2),attrs[k]);
+      else if(attrs[k]==null || attrs[k]===false) continue;   // 空屬性不設(否則 setAttribute('checked',null) 會變打勾)
+      else e.setAttribute(k,attrs[k]); }
+    (kids||[]).forEach(function(c){ if(c) e.appendChild(typeof c==='string'?document.createTextNode(c):c); });
+    return e; }
+  function money(n){ return 'NT$'+P.num(n).toLocaleString('en-US'); }
+  function toast(msg){ var t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+    clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('show');},1600); }
+  function download(name, obj){
+    var blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+    document.body.appendChild(a); a.click(); setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},500); }
+  function pickFile(cb){ var i=el('input',{type:'file',accept:'.json,application/json'});
+    i.addEventListener('change',function(){ var f=i.files[0]; if(!f)return; var r=new FileReader();
+      r.onload=function(){ try{ cb(JSON.parse(r.result)); }catch(e){ alert('讀取失敗：'+e.message); } }; r.readAsText(f); });
+    i.click(); }
+  function today(){ var d=new Date(); return (d.getMonth()+1)+'/'+d.getDate(); }
+  function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+  // ---- state ----
+  var role = ls(ROLE_KEY);
+  var O = ls(OWNER_KEY) || {items:[], presets:defaultPresets(), quick:[], orders:[], prefix:'A', device:'老闆機'};
+  var H = ls(HELPER_KEY) || {pkg:null, orders:[], device:'幫手機'};
+  function saveO(){ save(OWNER_KEY,O); } function saveH(){ save(HELPER_KEY,H); }
+  function defaultPresets(){ return [
+    {label:'折抵 50', type:'amount', value:50},
+    {label:'折抵 100', type:'amount', value:100},
+    {label:'打 9 折', type:'percent', value:9},
+    {label:'任選3張 500', type:'bundle', n:3, y:500}
+  ]; }
+
+  var cart=[], cartDisc=null;
+  var app=document.getElementById('app');
+
+  // ---------- role gate ----------
+  function renderGate(){
+    document.getElementById('chrome').classList.add('hide');
+    document.getElementById('tabs').classList.add('hide');
+    app.innerHTML='';
+    app.appendChild(el('div',{class:'wrap'},[
+      el('div',{class:'card center'},[
+        el('h1',{text:'北流市集 POS'}),
+        el('p',{class:'muted',text:'第一次在這支裝置使用，先選角色'}),
+        el('div',{class:'divider'}),
+        el('button',{class:'btn-primary',style:'width:100%;margin-bottom:10px',onclick:function(){setRole('owner');}},['我是老闆（完整：商品/會計/成本）']),
+        el('button',{class:'btn-ghost',style:'width:100%',onclick:function(){setRole('helper');}},['我是幫手（只收銀，看不到成本）']),
+        el('p',{class:'small muted',style:'margin-top:14px',text:'幫手機請選幫手，之後匯入老闆給的「幫手包」即可，成本資料不會進這支手機。'})
+      ])
+    ]));
+  }
+  function setRole(r){ role=r; save(ROLE_KEY,r); boot(); }
+
+  // ---------- chrome ----------
+  var curTab;
+  function boot(){
+    if(!role){ renderGate(); return; }
+    document.getElementById('chrome').classList.remove('hide');
+    document.getElementById('tabs').classList.remove('hide');
+    var rlab=document.getElementById('roleLabel');
+    rlab.textContent = role==='owner'?'老闆':'幫手';
+    rlab.className = 'role '+(role==='owner'?'owner':'helper');
+    buildTabs();
+    var tabs = role==='owner'?['pos','catalog','orders','acct','presets','data']:['pos','orders','hsetup'];
+    go(curTab && tabs.indexOf(curTab)>=0 ? curTab : tabs[0]);
+  }
+  function buildTabs(){
+    var nav=document.getElementById('tabs'); nav.innerHTML='';
+    var defs = role==='owner'
+      ? [['pos','🧾','收銀'],['catalog','💿','商品'],['orders','📦','訂單'],['acct','📊','會計'],['presets','🏷️','折扣'],['data','🔁','資料']]
+      : [['pos','🧾','收銀'],['orders','📦','訂單'],['hsetup','⚙️','設定']];
+    defs.forEach(function(d){
+      nav.appendChild(el('button',{class:curTab===d[0]?'active':'',onclick:function(){go(d[0]);}},[
+        el('span',{class:'ic',text:d[1]}), el('span',{text:d[2]}) ]));
+    });
+  }
+  function go(tab){ curTab=tab; buildTabs(); app.innerHTML='';
+    ({pos:renderPOS,catalog:renderCatalog,orders:renderOrders,acct:renderAcct,presets:renderPresets,data:renderData,hsetup:renderHsetup}[tab]||function(){})();
+    window.scrollTo(0,0);
+  }
+
+  // ---------- catalog source depending on role ----------
+  function catalog(){ return role==='owner' ? O.items.filter(function(i){return i.include!==false && i.code;})
+                                             : (H.pkg?H.pkg.items:[]); }
+  function presets(){ return role==='owner' ? O.presets : (H.pkg?H.pkg.presets:[]); }
+  function quick(){ return role==='owner' ? O.quick : (H.pkg?H.pkg.quick:[]); }
+  function orders(){ return role==='owner' ? O.orders : H.orders; }
+  function pushOrder(o){ if(role==='owner'){O.orders.push(o);saveO();} else {H.orders.push(o);saveH();} }
+
+  // ===================== 收銀 POS =====================
+  function renderPOS(){
+    var w=el('div',{class:'wrap'});
+    // 搜尋
+    var sb=el('div',{class:'searchbar'});
+    var input=el('input',{type:'search',inputmode:'text',placeholder:'輸入編號 / 藝人 / 專輯…',oninput:function(){renderResults(input.value);}});
+    sb.appendChild(input);
+    w.appendChild(sb);
+    var results=el('div',{id:'results'}); w.appendChild(results);
+
+    // 快速品項（銅板箱等）
+    if(quick().length){
+      var qg=el('div',{class:'card'});
+      qg.appendChild(el('div',{class:'small muted',style:'margin-bottom:8px',text:'快速品項（銅板箱／未編號）'}));
+      var grid=el('div',{class:'quickgrid'});
+      quick().forEach(function(q){
+        grid.appendChild(el('button',{class:'btn-gold',onclick:function(){ addLine({code:'', artist:q.label||'快速品項', album:'', version:'', price:P.num(q.price), quick:true, cost:(q.cost!=null?q.cost:null)}); }},[ (q.label||'快速')+' '+money(q.price) ]));
+      });
+      qg.appendChild(grid); w.appendChild(qg);
+    }
+
+    // 購物車
+    var cartCard=el('div',{class:'card',id:'cartCard'}); w.appendChild(cartCard);
+    app.appendChild(w);
+    renderResults(''); renderCart();
+
+    function renderResults(q){
+      results.innerHTML=''; q=(q||'').trim().toLowerCase();
+      if(!q){ results.appendChild(el('p',{class:'muted small center',style:'padding:16px',text:catalog().length?'輸入編號或關鍵字開始…':'尚無商品：請先在「商品」匯入或載入幫手包'})); return; }
+      var sold=P.soldCodes(orders());   // 已成立訂單售出的編號，不再出現在收銀
+      var hits=catalog().filter(function(it){
+        if(it.code && sold[it.code]) return false;
+        return (it.code||'').toLowerCase().indexOf(q)>=0 || (it.artist||'').toLowerCase().indexOf(q)>=0 || (it.album||'').toLowerCase().indexOf(q)>=0;
+      }).slice(0,40);
+      if(!hits.length){ results.appendChild(el('p',{class:'muted small center',style:'padding:16px',text:'查無商品'})); return; }
+      hits.forEach(function(it){
+        var inCart = cart.some(function(c){return c.code && c.code===it.code;});
+        results.appendChild(el('div',{class:'result',onclick:function(){ if(inCart){toast('已在購物車');return;} addLine(it); }},[
+          el('span',{class:'code-tag',text:it.code||'—'}),
+          el('div',{class:'grow'},[
+            el('div',{class:'ell',text:(it.artist||'')+' — '+(it.album||'')}),
+            it.version?el('div',{class:'small muted ell',text:it.version}):null
+          ]),
+          el('span',{class:'price',text:money(it.price)}),
+          inCart?el('span',{class:'pill',text:'已加'}):el('span',{class:'brand',style:'font-size:1.4rem',text:'＋'})
+        ]));
+      });
+    }
+
+    function renderCart(){
+      cartCard.innerHTML='';
+      cartCard.appendChild(el('div',{class:'row',style:'align-items:center'},[
+        el('h3',{style:'flex:1',text:'購物車 '+(cart.length?'('+cart.length+'件)':'')}),
+        cart.length?el('button',{class:'btn-ghost btn-sm',style:'flex:0 0 auto',onclick:function(){cart=[];cartDisc=null;renderCart();renderResults(input.value);}},['清空']):null
+      ]));
+      if(!cart.length){ cartCard.appendChild(el('p',{class:'muted small',text:'點上方商品加入'})); return; }
+      cart.forEach(function(l,idx){
+        cartCard.appendChild(el('div',{class:'cart-line'},[
+          el('span',{class:'code-tag small',text:l.code||'快速'}),
+          el('div',{class:'grow'},[ el('div',{class:'ell small',text:(l.artist||'')+(l.album?(' — '+l.album):'')}) ]),
+          el('span',{class:'price',text:money(l.price)}),
+          el('button',{class:'btn-ghost btn-sm',style:'flex:0 0 auto',onclick:function(){cart.splice(idx,1);cartDisc=null;renderCart();renderResults(input.value);}},['✕'])
+        ]));
+      });
+      var sub=P.calcCart(cart);
+      var d=P.applyDiscount(sub,cart,cartDisc);
+      // 折扣列
+      cartCard.appendChild(el('div',{class:'divider'}));
+      var dwrap=el('div',{class:'row'});
+      presets().forEach(function(pr){
+        dwrap.appendChild(el('button',{class:'btn-sm '+(cartDisc&&cartDisc.label===pr.label?'btn-gold':'btn-ghost'),style:'flex:0 0 auto',
+          onclick:function(){ cartDisc = (cartDisc&&cartDisc.label===pr.label)?null:Object.assign({},pr); renderCart(); }},[pr.label]));
+      });
+      dwrap.appendChild(el('button',{class:'btn-sm btn-ghost',style:'flex:0 0 auto',onclick:function(){manualDisc(sub);}},['自訂折扣']));
+      if(cartDisc) dwrap.appendChild(el('button',{class:'btn-sm btn-ghost',style:'flex:0 0 auto',onclick:function(){cartDisc=null;renderCart();}},['取消折扣']));
+      cartCard.appendChild(dwrap);
+      // 金額
+      cartCard.appendChild(el('div',{class:'divider'}));
+      cartCard.appendChild(el('div',{class:'row',style:'align-items:baseline'},[
+        el('div',{class:'muted small',style:'flex:1'},['小計 '+money(sub)+(d.amount?('　折 -'+money(d.amount)+(cartDisc?('（'+cartDisc.label+'）'):'')):'')]),
+      ]));
+      cartCard.appendChild(el('div',{class:'row',style:'align-items:center;margin-top:6px'},[
+        el('div',{style:'flex:1'},[ el('span',{class:'muted small',text:'銷售金額 '}), el('span',{class:'big gold',text:money(d.total)}) ]),
+        el('button',{class:'btn-primary',style:'flex:0 0 auto',onclick:function(){checkout(sub,d);}},['成立訂單'])
+      ]));
+    }
+
+    function addLine(it){ cart.push({code:it.code||'', artist:it.artist||'', album:it.album||'', version:it.version||'',
+      price:P.num(it.price), quick:!!it.quick, cost:(it.cost!=null?it.cost:null)}); cartDisc=null; renderCart(); renderResults(input.value); }
+
+    function manualDisc(sub){
+      var v=prompt('自訂折扣：\n輸入「-100」折抵100元\n輸入「85%」打85折\n輸入「=999」直接把總額改成999');
+      if(v==null) return; v=String(v).trim();
+      if(v.slice(-1)==='%'){ var pct=P.num(v.slice(0,-1)); cartDisc={label:v,type:'percent',value:pct/10}; }
+      else if(v[0]==='='){ cartDisc={label:'總額 '+v.slice(1),type:'setTotal',value:P.num(v.slice(1))}; }
+      else { cartDisc={label:'折抵'+v.replace('-',''),type:'amount',value:P.num(v)}; }
+      renderCart();
+    }
+
+    function checkout(sub,d){
+      var o={ id:uid(), ts:Date.now(), day:today(), device:(role==='owner'?O.device:H.device),
+        lines:cart.map(function(l){ var ln={code:l.code,artist:l.artist,album:l.album,version:l.version,price:P.num(l.price)};
+          if(l.quick && l.cost!=null) ln.cost=P.num(l.cost); if(l.quick) ln.quick=true; return ln; }),
+        itemCount:cart.length, subtotal:sub, discount: cartDisc?Object.assign({amount:d.amount},cartDisc):null, total:d.total };
+      pushOrder(o); cart=[]; cartDisc=null; renderCart(); renderResults(input.value);
+      toast('✓ 成交 '+money(o.total)+'　今日 '+dayCount());
+    }
+    function dayCount(){ var t=today(); var os=orders().filter(function(o){return o.day===t;});
+      var rev=os.reduce(function(s,o){return s+P.num(o.total);},0); return os.length+' 單 / '+money(rev); }
+  }
+
+  // ===================== 商品（老闆）=====================
+  function renderCatalog(){
+    app.innerHTML='';                 // 直接重繪時也要清空(不然疊加在舊畫面下)
+    var w=el('div',{class:'wrap'});
+    w.appendChild(el('div',{class:'card'},[
+      el('h3',{text:'商品資料'}),
+      el('p',{class:'small muted',text:'共 '+O.items.length+' 筆，帶去擺攤 '+O.items.filter(function(i){return i.include!==false&&i.code;}).length+' 筆'}),
+      el('p',{class:'small muted',html:'流程：先把貨加齊（匯入只帶「在售/保留中」，已售出/已下架不進來；再次匯入只<b>加新的</b>、不動舊資料），全部加完再按 <b>編號</b>——只補未編號的，已編號的不會被覆蓋。'}),
+      el('div',{class:'row'},[
+        el('button',{class:'btn-ghost btn-sm',onclick:importData},['匯入 / 合併 data.json']),
+        el('button',{class:'btn-ghost btn-sm',onclick:addManual},['＋ 手動新增']),
+      ]),
+      el('div',{class:'row',style:'margin-top:8px'},[
+        el('button',{class:'btn-primary btn-sm',onclick:fillCodes},['編號（補未編號 '+O.items.filter(function(i){return i.include!==false && !(i.code&&String(i.code).trim());}).length+' 筆）']),
+        el('button',{class:'btn-ghost btn-sm',onclick:renumberAll},['重新編號全部']),
+      ]),
+      el('div',{class:'row',style:'margin-top:8px'},[
+        el('button',{class:'btn-ghost btn-sm',onclick:function(){var p=prompt('編號前綴（如 A、R、B）',O.prefix);if(p){O.prefix=p.trim()||'A';saveO();renderCatalog();}}},['改前綴（目前 '+O.prefix+'）']),
+        el('button',{class:'btn-ghost btn-sm',onclick:function(){if(confirm('清空全部商品資料？此動作無法復原。')){O.items=[];saveO();renderCatalog();}}},['清空全部']),
+      ])
+    ]));
+    var filter=el('input',{type:'search',placeholder:'搜尋…',style:'margin-bottom:10px',oninput:function(){draw(filter.value);}});
+    w.appendChild(filter);
+    var listCard=el('div',{class:'card',id:'catList'}); w.appendChild(listCard);
+    app.appendChild(w); draw('');
+
+    function draw(q){ q=(q||'').trim().toLowerCase(); listCard.innerHTML='';
+      var sold=P.soldCodes(O.orders);
+      var items=O.items.filter(function(it){ return !q || (it.code||'').toLowerCase().indexOf(q)>=0 || (it.artist||'').toLowerCase().indexOf(q)>=0 || (it.album||'').toLowerCase().indexOf(q)>=0; });
+      if(!items.length){ listCard.appendChild(el('p',{class:'muted small',text:'（無）'})); return; }
+      items.slice(0,300).forEach(function(it){
+        var i=O.items.indexOf(it);
+        var isSold=it.code && sold[it.code];
+        listCard.appendChild(el('div',{class:'list-item',style:isSold?'opacity:.5':null},[
+          el('input',{type:'checkbox',style:'width:22px;flex:0 0 auto', checked:it.include!==false?'checked':null, onchange:function(e){it.include=e.target.checked;saveO();}}),
+          el('span',{class:'code-tag',text:it.code||'—'}),
+          el('div',{class:'grow',onclick:function(){editItem(i);}},[
+            el('div',{class:'ell',text:(it.artist||'?')+' — '+(it.album||'?')}),
+            el('div',{class:'small muted ell',text:(it.version?it.version+' · ':'')+ (it.cost==null?'成本未知':'成本 '+money(it.cost)) })
+          ]),
+          isSold?el('span',{class:'pill',style:'background:#4a2f2c;color:var(--gold)',text:'已售'}):null,
+          el('span',{class:'price',onclick:function(){editItem(i);},text:money(it.price)})
+        ]));
+      });
+      if(items.length>300) listCard.appendChild(el('p',{class:'muted small center',text:'（僅顯示前 300 筆，用搜尋縮小）'}));
+    }
+    function importData(){ pickFile(function(obj){
+      var parsed=P.parseDataJson(obj);
+      if(!parsed.length){ alert('這個檔案沒有可賣的商品（在售/保留中）'); return; }
+      var r=P.mergeImport(O.items, parsed);
+      O.items=r.items; saveO();
+      toast('新增 '+r.added+' 筆'+(r.skipped?('，已存在 '+r.skipped+' 筆略過'):'')+'；記得按「編號」');
+      renderCatalog();
+    }); }
+    function fillCodes(){ var before=O.items.filter(function(i){return i.include!==false && !(i.code&&String(i.code).trim());}).length;
+      if(!before){ toast('沒有未編號的商品'); return; }
+      O.items=P.assignCodes(O.items,O.prefix); saveO(); toast('已補編號 '+before+' 筆（舊號不動）'); renderCatalog(); }
+    function renumberAll(){ if(!confirm('會把所有要賣的商品重新連號（前綴 '+O.prefix+'）。\n若已印過標籤，重編會對不上，請勿使用。\n確定重編？')) return;
+      O.items=P.assignCodes(O.items,O.prefix,true); saveO(); toast('已重新編號'); renderCatalog(); }
+    function addManual(){ O.items.unshift({code:'',artist:'',album:'',version:'',price:0,cost:null,include:true,source:'manual'}); saveO(); editItem(0); }
+  }
+
+  function editItem(i){
+    var it=O.items[i]; if(!it) return;
+    var m=modal('編輯商品',[
+      field('編號','code',it.code||''),
+      field('藝人','artist',it.artist||''),
+      field('專輯','album',it.album||''),
+      field('版本／註記（區分同專輯不同版本）','version',it.version||''),
+      field('售價','price',it.price,'number'),
+      field('成本（留空＝未知）','cost',it.cost==null?'':it.cost,'number')
+    ], function(vals){
+      it.code=vals.code.trim(); it.artist=vals.artist.trim(); it.album=vals.album.trim(); it.version=vals.version.trim();
+      it.price=P.num(vals.price); it.cost = vals.cost.trim()===''?null:P.num(vals.cost);
+      saveO(); renderCatalog();
+    }, function(){ if(confirm('刪除這筆？')){ O.items.splice(i,1); saveO(); renderCatalog(); } });
+  }
+
+  // ===================== 訂單 =====================
+  function renderOrders(){
+    app.innerHTML='';
+    var w=el('div',{class:'wrap'});
+    var os=orders().slice().sort(function(a,b){return b.ts-a.ts;});
+    var rev=os.reduce(function(s,o){return s+P.num(o.total);},0);
+    w.appendChild(el('div',{class:'card'},[
+      el('div',{class:'row'},[
+        el('div',{class:'stat'},[el('div',{class:'n',text:os.length}),el('div',{class:'small muted',text:'訂單'})]),
+        el('div',{class:'stat'},[el('div',{class:'n gold',text:money(rev)}),el('div',{class:'small muted',text:'銷售額'})]),
+        el('div',{class:'stat'},[el('div',{class:'n',text:os.reduce(function(s,o){return s+(o.itemCount||0);},0)}),el('div',{class:'small muted',text:'張數'})])
+      ]),
+      role==='helper'?el('button',{class:'btn-primary',style:'width:100%;margin-top:10px',onclick:exportOrders},['匯出訂單給老闆']):null
+    ]));
+    var listCard=el('div',{class:'card'});
+    if(!os.length) listCard.appendChild(el('p',{class:'muted small',text:'尚無訂單'}));
+    os.forEach(function(o){
+      listCard.appendChild(el('div',{class:'list-item'},[
+        el('div',{class:'grow',onclick:function(){orderDetail(o);}},[
+          el('div',{text:money(o.total)+' ',html:'<b>'+money(o.total)+'</b> <span class="small muted">'+o.itemCount+'件'+(o.discount?' · 折'+money(o.discount.amount):'')+'</span>'}),
+          el('div',{class:'small muted',text:o.day+' · '+(o.device||'')+' · '+new Date(o.ts).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})})
+        ]),
+        el('button',{class:'btn-ghost btn-sm',style:'flex:0 0 auto',onclick:function(){ if(confirm('刪除此訂單？')){ var arr=orders(); arr.splice(arr.indexOf(o),1); role==='owner'?saveO():saveH(); renderOrders(); } }},['✕'])
+      ]));
+    });
+    w.appendChild(listCard); app.appendChild(w);
+
+    function exportOrders(){ if(!H.orders.length){alert('沒有訂單');return;}
+      download('北流訂單_'+H.device+'_'+today().replace('/','-')+'.json', {kind:'orders',device:H.device,orders:H.orders}); }
+  }
+  function orderDetail(o){
+    modal('訂單明細 '+money(o.total), o.lines.map(function(l){
+      return el('div',{class:'list-item'},[ el('span',{class:'code-tag small',text:l.code||'快速'}),
+        el('div',{class:'grow'},[el('div',{class:'ell small',text:(l.artist||'')+(l.album?(' — '+l.album):'')})]),
+        el('span',{class:'price',text:money(l.price)}) ]);
+    }).concat([ el('div',{class:'divider'}), el('div',{class:'muted small',
+      text:'小計 '+money(o.subtotal)+(o.discount?('　折 -'+money(o.discount.amount)+'（'+o.discount.label+'）'):'')+'　→ '+money(o.total)}) ]), null, null, '關閉');
+  }
+
+  // ===================== 會計（老闆）=====================
+  function renderAcct(){
+    var byCode={}; O.items.forEach(function(it){ if(it.code) byCode[it.code]=it; });
+    var a=P.computeAccounting(O.orders, byCode);
+    var w=el('div',{class:'wrap'});
+    w.appendChild(el('div',{class:'card'},[
+      el('h3',{text:'會計'}),
+      el('div',{class:'row'},[
+        el('div',{class:'stat'},[el('div',{class:'n gold',text:money(a.revenue)}),el('div',{class:'small muted',text:'營收'})]),
+        el('div',{class:'stat'},[el('div',{class:'n',text:money(a.knownCost)}),el('div',{class:'small muted',text:'成本'})]),
+      ]),
+      el('div',{class:'row',style:'margin-top:8px'},[
+        el('div',{class:'stat'},[el('div',{class:'n green',text:money(a.profit)}),el('div',{class:'small muted',text:'毛利'})]),
+        el('div',{class:'stat'},[el('div',{class:'n',text:(a.margin*100).toFixed(0)+'%'}),el('div',{class:'small muted',text:'毛利率'})]),
+      ]),
+      el('div',{class:'row',style:'margin-top:8px'},[
+        el('div',{class:'stat'},[el('div',{class:'n',text:a.orders}),el('div',{class:'small muted',text:'訂單'})]),
+        el('div',{class:'stat'},[el('div',{class:'n',text:a.itemsSold}),el('div',{class:'small muted',text:'售出張數'})]),
+      ]),
+      a.unknownCostCount?el('p',{class:'pill warn',style:'margin-top:12px;display:block',
+        text:'⚠ 有 '+a.unknownCostCount+' 件成本未知，未計入成本，實際毛利會比上面低。到「商品」補成本後即更新。'}):null
+    ]));
+    var days=Object.keys(a.byDay);
+    if(days.length){ var dc=el('div',{class:'card'},[el('h3',{text:'分日'})]);
+      days.sort().forEach(function(d){ var x=a.byDay[d];
+        dc.appendChild(el('div',{class:'list-item'},[ el('div',{class:'grow',text:d}),
+          el('span',{class:'small muted',text:x.orders+'單 · '+x.items+'張'}), el('span',{class:'price',text:money(x.revenue)}) ])); });
+      w.appendChild(dc); }
+    app.appendChild(w);
+  }
+
+  // ===================== 折扣設定（老闆）=====================
+  function renderPresets(){
+    app.innerHTML='';
+    var w=el('div',{class:'wrap'});
+    w.appendChild(el('div',{class:'card'},[ el('h3',{text:'折扣預設'}),
+      el('p',{class:'small muted',text:'這些會一起打包進「幫手包」，幫手結帳時一鍵套用。'}),
+      el('button',{class:'btn-ghost btn-sm',onclick:function(){editPreset(-1);}},['＋ 新增預設']) ]));
+    var lc=el('div',{class:'card'});
+    O.presets.forEach(function(p,i){ lc.appendChild(el('div',{class:'list-item'},[
+      el('div',{class:'grow',onclick:function(){editPreset(i);},text:p.label+'　'+descPreset(p)}),
+      el('button',{class:'btn-ghost btn-sm',style:'flex:0 0 auto',onclick:function(){O.presets.splice(i,1);saveO();renderPresets();}},['✕']) ])); });
+    w.appendChild(lc);
+    w.appendChild(el('div',{class:'card'},[ el('h3',{text:'快速品項按鈕'}),
+      el('p',{class:'small muted',text:'銅板箱等未逐張編號的商品，收銀直接一鍵加價。成本可留空（會計會標未知）。'}),
+      el('button',{class:'btn-ghost btn-sm',onclick:function(){editQuick(-1);}},['＋ 新增快速品項']) ]));
+    var qc=el('div',{class:'card'});
+    O.quick.forEach(function(q,i){ qc.appendChild(el('div',{class:'list-item'},[
+      el('div',{class:'grow',onclick:function(){editQuick(i);},text:(q.label||'(無標籤)')+'　'+money(q.price)+(q.cost!=null?('　成本'+money(q.cost)):'　成本未知')}),
+      el('button',{class:'btn-ghost btn-sm',style:'flex:0 0 auto',onclick:function(){O.quick.splice(i,1);saveO();renderPresets();}},['✕']) ])); });
+    w.appendChild(qc); app.appendChild(w);
+
+    function descPreset(p){ return p.type==='amount'?('折抵 '+money(p.value)) : p.type==='percent'?('打 '+p.value+' 折')
+      : p.type==='bundle'?('任選 '+p.n+' 張 = '+money(p.y)) : p.type; }
+    function editPreset(i){ var p=i<0?{label:'',type:'amount',value:0,n:3,y:500}:O.presets[i];
+      var typeSel=el('select',{},[opt('amount','折抵金額'),opt('percent','打折(輸折數,如9=9折)'),opt('bundle','任選N張套餐價')]); typeSel.value=p.type;
+      function opt(v,t){var o=el('option',{value:v,text:t});return o;}
+      modal(i<0?'新增預設':'編輯預設',[
+        field('顯示名稱','label',p.label), wrapLabel('折扣類型',typeSel),
+        field('金額 / 折數','value',p.value,'number'),
+        field('組合：任選幾張(N)','n',p.n||3,'number'), field('組合：套餐價(Y)','y',p.y||500,'number')
+      ], function(v){ var np={label:v.label.trim()||'折扣',type:typeSel.value,value:P.num(v.value),n:P.num(v.n),y:P.num(v.y)};
+        if(i<0)O.presets.push(np); else O.presets[i]=np; saveO(); renderPresets(); }); }
+    function editQuick(i){ var q=i<0?{label:'',price:0,cost:null}:O.quick[i];
+      modal(i<0?'新增快速品項':'編輯快速品項',[ field('標籤（如 銅板箱$50）','label',q.label||''),
+        field('售價','price',q.price,'number'), field('成本（留空＝未知）','cost',q.cost==null?'':q.cost,'number')
+      ], function(v){ var nq={label:v.label.trim(),price:P.num(v.price),cost:v.cost.trim()===''?null:P.num(v.cost)};
+        if(i<0)O.quick.push(nq); else O.quick[i]=nq; saveO(); renderPresets(); }); }
+  }
+
+  // ===================== 資料 / 匯出（老闆）=====================
+  function renderData(){
+    var w=el('div',{class:'wrap'});
+    w.appendChild(el('div',{class:'card'},[ el('h3',{text:'幫手包'}),
+      el('p',{class:'small muted',text:'匯出「不含成本」的商品＋折扣＋快速品項，傳到幫手手機匯入。成本資料不會出現在這個檔裡。'}),
+      el('button',{class:'btn-primary',style:'width:100%',onclick:function(){
+        var pkg=P.buildHelperPackage(O.items,O.presets,O.quick);
+        if(!pkg.items.length){alert('沒有已編號且勾選的商品');return;}
+        download('北流幫手包_'+today().replace('/','-')+'.json',pkg); toast('已匯出 '+pkg.items.length+' 筆（無成本）');
+      }},['匯出幫手包（'+O.items.filter(function(i){return i.include!==false&&i.code;}).length+' 筆）']) ]));
+    w.appendChild(el('div',{class:'card'},[ el('h3',{text:'匯入幫手訂單'}),
+      el('p',{class:'small muted',text:'收攤後把幫手手機匯出的訂單檔匯入這裡，合併進會計。重複的訂單會自動略過。'}),
+      el('button',{class:'btn-ghost',style:'width:100%',onclick:function(){ pickFile(function(obj){
+        var arr=(obj&&obj.orders)||[]; if(!arr.length){alert('這不是訂單檔');return;}
+        var have={}; O.orders.forEach(function(o){have[o.id]=1;}); var add=0;
+        arr.forEach(function(o){ if(!have[o.id]){O.orders.push(o);add++;} }); saveO();
+        alert('匯入 '+add+' 筆新訂單（略過重複 '+(arr.length-add)+' 筆）'); }); }},['選擇訂單檔匯入']) ]));
+    w.appendChild(el('div',{class:'card'},[ el('h3',{text:'完整備份 / 還原'}),
+      el('div',{class:'row'},[
+        el('button',{class:'btn-ghost',onclick:function(){download('北流POS備份_'+today().replace('/','-')+'.json',{kind:'full-backup',O:O});}},['匯出完整備份']),
+        el('button',{class:'btn-ghost',onclick:function(){ pickFile(function(obj){ if(obj&&obj.O&&confirm('還原會覆蓋目前全部資料，確定？')){O=obj.O;saveO();toast('已還原');boot();} else if(!obj.O) alert('不是備份檔'); }); }},['還原備份'])
+      ]) ]));
+    w.appendChild(el('div',{class:'card'},[ el('h3',{text:'列印標籤'}),
+      el('p',{class:'small muted',text:'印出「編號＋售價」貼在 CD 上，現場幫手靠編號秒找。'}),
+      el('button',{class:'btn-gold',style:'width:100%',onclick:printLabels},['開啟標籤列印頁']) ]));
+    w.appendChild(el('div',{class:'card'},[
+      el('button',{class:'btn-ghost',style:'width:100%',onclick:function(){if(confirm('切換角色？資料留著。')){save(ROLE_KEY,null);role=null;boot();}}},['切換角色']) ]));
+    app.appendChild(w);
+  }
+  function printLabels(){
+    var items=O.items.filter(function(i){return i.include!==false&&i.code;});
+    if(!items.length){alert('沒有已編號的商品');return;}
+    var win=window.open('','_blank');
+    var rows=items.map(function(it){ return '<div class="lb"><div class="c">'+esc(it.code)+'</div><div class="a">'+esc(it.artist)+'</div><div class="p">NT$'+P.num(it.price)+'</div></div>'; }).join('');
+    win.document.write('<html><head><meta charset="utf-8"><title>標籤</title><style>@page{margin:8mm}body{font-family:-apple-system,sans-serif}'+
+      '.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4mm}.lb{border:1px solid #999;border-radius:4px;padding:4mm 2mm;text-align:center;page-break-inside:avoid}'+
+      '.c{font-size:16pt;font-weight:800}.a{font-size:8pt;color:#555;height:2.4em;overflow:hidden}.p{font-size:13pt;font-weight:700}</style></head>'+
+      '<body onload="print()"><div class="grid">'+rows+'</div></body></html>'); win.document.close();
+  }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  // ===================== 設定（幫手）=====================
+  function renderHsetup(){
+    var w=el('div',{class:'wrap'});
+    w.appendChild(el('div',{class:'card'},[ el('h3',{text:'載入幫手包'}),
+      el('p',{class:'small muted',text:H.pkg?('目前：'+H.pkg.items.length+' 筆商品 · 打包於 '+new Date(H.pkg.ts).toLocaleString('zh-TW')):'尚未載入。請匯入老闆給的「幫手包」。'}),
+      el('button',{class:'btn-primary',style:'width:100%',onclick:function(){ pickFile(function(obj){
+        if(obj&&obj.kind==='helper-package'){ H.pkg=obj; saveH(); toast('載入 '+obj.items.length+' 筆'); go('pos'); }
+        else alert('這不是幫手包檔案'); }); }},['選擇幫手包檔案']) ]));
+    w.appendChild(el('div',{class:'card'},[ el('label',{text:'這支裝置名稱（匯出訂單會標記）'}),
+      el('input',{value:H.device,onchange:function(e){H.device=e.target.value.trim()||'幫手機';saveH();}}) ]));
+    w.appendChild(el('div',{class:'card'},[
+      el('button',{class:'btn-ghost',style:'width:100%',onclick:function(){if(confirm('切換角色？')){save(ROLE_KEY,null);role=null;boot();}}},['切換角色']) ]));
+    app.appendChild(w);
+  }
+
+  // ===================== 小工具：modal / field =====================
+  function field(label,key,val,type){ var i=el('input',{type:type||'text',value:(val==null?'':val)}); i.dataset.key=key;
+    if(type==='number')i.setAttribute('inputmode','decimal'); return el('div',{},[el('label',{text:label}),i]); }
+  function wrapLabel(label,node){ return el('div',{},[el('label',{text:label}),node]); }
+  function modal(title,body,onSave,onDelete,saveLabel){
+    var ov=el('div',{style:'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:60;display:flex;align-items:flex-end;justify-content:center'});
+    var card=el('div',{class:'card',style:'max-width:760px;width:100%;max-height:88vh;overflow:auto;border-radius:16px 16px 0 0;margin:0'});
+    card.appendChild(el('h3',{text:title})); body.forEach(function(b){card.appendChild(b);});
+    var bar=el('div',{class:'row',style:'margin-top:14px'});
+    if(onDelete) bar.appendChild(el('button',{class:'btn-ghost',style:'flex:0 0 auto',onclick:function(){ov.remove();onDelete();}},['刪除']));
+    bar.appendChild(el('button',{class:'btn-ghost',onclick:function(){ov.remove();}},['關閉']));
+    if(onSave) bar.appendChild(el('button',{class:'btn-primary',onclick:function(){ var vals={};
+      card.querySelectorAll('input[data-key]').forEach(function(i){vals[i.dataset.key]=i.value;}); ov.remove(); onSave(vals); }},[saveLabel||'儲存']));
+    card.appendChild(bar); ov.appendChild(card); ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+    document.body.appendChild(ov); return ov;
+  }
+
+  boot();
+})();
+}
+</script>
+</body>
+</html>
