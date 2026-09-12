@@ -153,20 +153,31 @@ eq('直接改總額', P.applyDiscount(770, [], { type: 'setTotal', value: 700 })
   eq('收銀可見: A001已售被排除、A003與未編號留下', visible.map(i => i.code).join(','), 'A003,');
 })();
 
-// 10. 幫手包：絕對不含成本（key 與值都不能外洩）
+// 9c. 老闆 PIN：雜湊不含明文、驗證正確/錯誤/空值
+(function () {
+  const h = P.hashPin('1234');
+  eq('hashPin 同輸入同結果', P.hashPin('1234'), h);
+  ok('hashPin 不同輸入不同結果', P.hashPin('1234') !== P.hashPin('1235'));
+  ok('hashPin 不含明文 PIN', h.indexOf('1234') === -1);
+  ok('verifyPin 正確通過', P.verifyPin('1234', h) === true);
+  ok('verifyPin 錯誤擋下', P.verifyPin('0000', h) === false);
+  ok('verifyPin 無 PIN 時不放行(空字串)', P.verifyPin('1234', '') === false);
+  ok('verifyPin 無 PIN 時不放行(null)', P.verifyPin('1234', null) === false);
+})();
+
+// 10. 幫手包：絕對不含成本（key 與值都不能外洩）。用不撞價格的獨特成本值，且掃描排除 ts 時間戳
 (function () {
   const items = [
-    { code: 'A001', artist: 'Nirvana', album: 'In Utero', version: '', price: 350, cost: 120, include: true },
-    { code: 'A002', artist: 'Radiohead', album: 'OK Computer', version: '英版', price: 400, cost: 999, include: true },
-    { code: '', artist: 'NoCode', album: 'x', price: 50, cost: 5, include: true }, // 無編號不進包
-    { code: 'A003', artist: 'Skip', album: 'y', price: 10, cost: 3, include: false } // 未勾選不進包
+    { code: 'A001', artist: 'Nirvana', album: 'In Utero', version: '', price: 350, cost: 7777, include: true },
+    { code: 'A002', artist: 'Radiohead', album: 'OK Computer', version: '英版', price: 400, cost: 8888, include: true },
+    { code: '', artist: 'NoCode', album: 'x', price: 50, cost: 6666, include: true }, // 無編號不進包
+    { code: 'A003', artist: 'Skip', album: 'y', price: 10, cost: 5555, include: false } // 未勾選不進包
   ];
-  const pkg = P.buildHelperPackage(items, [{ label: '折100', type: 'amount', value: 100 }], [{ label: '銅板', price: 50, cost: 8 }]);
-  const s = JSON.stringify(pkg);
-  ok('幫手包無 cost 這個 key', s.indexOf('"cost"') === -1, s);
-  ok('幫手包無成本值 120', s.indexOf('120') === -1);
-  ok('幫手包無成本值 999', s.indexOf('999') === -1);
-  ok('快速品項成本 8 不外洩', s.indexOf('"cost":8') === -1 && s.indexOf('8}') === -1);
+  const pkg = P.buildHelperPackage(items, [{ label: '折100', type: 'amount', value: 100 }], [{ label: '銅板', price: 50, cost: 9999 }]);
+  ok('幫手包 items 無 cost 屬性', pkg.items.every(it => !('cost' in it)));
+  ok('幫手包 quick 無 cost 屬性', (pkg.quick || []).every(q => !('cost' in q)));
+  const scan = JSON.stringify(pkg.items) + JSON.stringify(pkg.quick) + JSON.stringify(pkg.presets);
+  ok('無任何成本值外洩', ['7777', '8888', '6666', '5555', '9999'].every(v => scan.indexOf(v) === -1), scan);
   eq('幫手包只收已編號+勾選', pkg.items.length, 2);
   ok('幫手包保留售價', pkg.items[0].price === 350);
 })();
