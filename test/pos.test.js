@@ -153,16 +153,13 @@ eq('直接改總額', P.applyDiscount(770, [], { type: 'setTotal', value: 700 })
   eq('收銀可見: A001已售被排除、A003與未編號留下', visible.map(i => i.code).join(','), 'A003,');
 })();
 
-// 9c. 老闆 PIN：雜湊不含明文、驗證正確/錯誤/空值
+// 9c. 老闆 PIN：寫死 0408，正確放行、其餘一律擋（純唬人用）
 (function () {
-  const h = P.hashPin('1234');
-  eq('hashPin 同輸入同結果', P.hashPin('1234'), h);
-  ok('hashPin 不同輸入不同結果', P.hashPin('1234') !== P.hashPin('1235'));
-  ok('hashPin 不含明文 PIN', h.indexOf('1234') === -1);
-  ok('verifyPin 正確通過', P.verifyPin('1234', h) === true);
-  ok('verifyPin 錯誤擋下', P.verifyPin('0000', h) === false);
-  ok('verifyPin 無 PIN 時不放行(空字串)', P.verifyPin('1234', '') === false);
-  ok('verifyPin 無 PIN 時不放行(null)', P.verifyPin('1234', null) === false);
+  ok('正確 0408 放行', P.checkOwnerPin('0408') === true);
+  ok('錯誤 PIN 擋下', P.checkOwnerPin('1234') === false);
+  ok('空字串擋下', P.checkOwnerPin('') === false);
+  ok('null 擋下', P.checkOwnerPin(null) === false);
+  ok('相近但不同擋下', P.checkOwnerPin('04080') === false);
 })();
 
 // 10. 幫手包：絕對不含成本（key 與值都不能外洩）。用不撞價格的獨特成本值，且掃描排除 ts 時間戳

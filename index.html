@@ -169,13 +169,9 @@
     return { amount:amount, total: Math.max(0, subtotal - amount) };
   }
 
-  // 老闆 PIN：只做雜湊(非明文存本機)。屬「防旁人隨手翻看」等級，非加密
-  function hashPin(s){
-    s=String(s==null?'':s); var h=5381;
-    for(var i=0;i<s.length;i++){ h=((h<<5)+h+s.charCodeAt(i))|0; }
-    return 'p'+(h>>>0).toString(36);
-  }
-  function verifyPin(input, stored){ return !!stored && hashPin(input)===stored; }
+  // 老闆 PIN：寫死在程式裡，純粹用來唬走幫手（不是加密、不是真正的資料保護）
+  var OWNER_PIN='0408';
+  function checkOwnerPin(input){ return String(input==null?'':input)===OWNER_PIN; }
 
   // 已售編號集合：出現在任何訂單裡的編號(空號不計)。收銀據此排除，避免同一張賣兩次
   function soldCodes(orders){
@@ -221,7 +217,7 @@
 
   g.POS = { num:num, costOf:costOf, parseDataJson:parseDataJson, assignCodes:assignCodes,
     maxCodeNum:maxCodeNum, mergeImport:mergeImport, calcCart:calcCart, bundleDiscount:bundleDiscount,
-    applyDiscount:applyDiscount, soldCodes:soldCodes, hashPin:hashPin, verifyPin:verifyPin,
+    applyDiscount:applyDiscount, soldCodes:soldCodes, checkOwnerPin:checkOwnerPin,
     buildHelperPackage:buildHelperPackage, computeAccounting:computeAccounting };
 })(typeof globalThis!=='undefined'?globalThis:this);
 </script>
@@ -231,7 +227,7 @@
 if (typeof document !== 'undefined') {
 (function(){
   var P = globalThis.POS;
-  var OWNER_KEY='nlpos_owner', HELPER_KEY='nlpos_helper', ROLE_KEY='nlpos_role', PIN_KEY='nlpos_pin';
+  var OWNER_KEY='nlpos_owner', HELPER_KEY='nlpos_helper', ROLE_KEY='nlpos_role';
   var ownerAuthed=false;   // 本次開啟是否已通過老闆 PIN（不持久，重開要再輸入）
 
   function ls(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } }
@@ -290,54 +286,25 @@ if (typeof document !== 'undefined') {
   }
   function setRole(r){ role=r; ownerAuthed=false; save(ROLE_KEY,r); boot(); }
 
-  // ---------- 老闆 PIN 閘門 ----------
-  // 每次進入老闆模式(含重開 App)都要 PIN；PIN 只做雜湊存本機，屬防旁人隨手翻看等級
+  // ---------- 密碼閘門 ----------
+  // 中性畫面(不透露用途)。PIN 寫死 0408，純唬走幫手；每次進老闆模式都要輸入
   function renderPinGate(){
     document.getElementById('chrome').classList.add('hide');
     document.getElementById('tabs').classList.add('hide');
     app.innerHTML='';
-    var stored=ls(PIN_KEY), hasPin=!!stored;
-    var p1=el('input',{type:'password',inputmode:'numeric',placeholder:'PIN（至少4位數字）',style:'text-align:center;letter-spacing:4px;font-size:1.3rem'});
-    var p2=el('input',{type:'password',inputmode:'numeric',placeholder:'再輸入一次',style:'text-align:center;letter-spacing:4px;font-size:1.3rem'});
+    var p1=el('input',{type:'password',inputmode:'numeric',placeholder:'密碼',style:'text-align:center;letter-spacing:4px;font-size:1.3rem'});
     var err=el('p',{class:'small',style:'color:var(--danger);min-height:1.2em;margin:6px 0 0'});
-    function fail(m){ err.textContent=m; }
-    var body=[ el('h2',{text:hasPin?'🔒 輸入老闆 PIN':'🔒 設定老闆 PIN'}),
-      el('p',{class:'small muted',text:hasPin?'看成本與會計前，請輸入 PIN。':'第一次進入老闆模式，設定一組 PIN 保護成本/會計。請記住它——忘記需清空本機資料才能重設。'}),
-      el('div',{style:'margin-top:12px'},[p1]) ];
-    if(!hasPin) body.push(el('div',{style:'margin-top:8px'},[p2]));
-    body.push(err);
-    var btn=el('button',{class:'btn-primary',style:'width:100%;margin-top:12px',onclick:function(){
-      var v=(p1.value||'').trim();
-      if(hasPin){
-        if(P.verifyPin(v, stored)){ ownerAuthed=true; boot(); } else { fail('PIN 錯誤'); p1.value=''; p1.focus(); }
-      } else {
-        if(!/^\d{4,}$/.test(v)){ fail('請輸入至少 4 位數字'); return; }
-        if(v!==(p2.value||'').trim()){ fail('兩次輸入不一致'); return; }
-        save(PIN_KEY, P.hashPin(v)); ownerAuthed=true; toast('PIN 已設定'); boot();
-      }
-    }},[hasPin?'進入':'設定並進入']);
-    var card=el('div',{class:'card center'},body.concat([ btn,
+    function submit(){ if(P.checkOwnerPin((p1.value||'').trim())){ ownerAuthed=true; boot(); } else { err.textContent='密碼錯誤'; p1.value=''; p1.focus(); } }
+    p1.addEventListener('keydown',function(e){ if(e.key==='Enter') submit(); });
+    var card=el('div',{class:'card center'},[
+      el('h2',{text:'🔒 請輸入密碼'}),
+      el('div',{style:'margin-top:12px'},[p1]),
+      err,
+      el('button',{class:'btn-primary',style:'width:100%;margin-top:12px',onclick:submit},['進入']),
       el('button',{class:'btn-ghost',style:'width:100%;margin-top:8px',onclick:function(){ role=null; ownerAuthed=false; save(ROLE_KEY,null); boot(); }},['返回選擇身分'])
-    ]));
-    if(hasPin){ card.appendChild(el('button',{class:'btn-ghost btn-sm',style:'margin-top:10px;color:var(--muted)',onclick:function(){
-      if(confirm('忘記 PIN 只能「清空本機的老闆資料(商品/訂單/PIN)」來重設。\n幫手手機的訂單不受影響，但這台的商品與已成交訂單會消失（建議先匯出備份）。\n確定清空並重設？')){
-        localStorage.removeItem(PIN_KEY); localStorage.removeItem(OWNER_KEY);
-        O={items:[], presets:defaultPresets(), quick:[], orders:[], prefix:'A', device:'老闆機'}; ownerAuthed=false; renderPinGate();
-      }
-    }},['忘記 PIN？']));
-    }
+    ]);
     app.appendChild(el('div',{class:'wrap'},[card]));
     setTimeout(function(){ p1.focus(); },50);
-  }
-
-  function changePin(){
-    var cur=ls(PIN_KEY);
-    if(cur){ var old=prompt('輸入目前 PIN'); if(old==null) return; if(!P.verifyPin((old||'').trim(),cur)){ alert('PIN 錯誤'); return; } }
-    var np=prompt('新 PIN（至少 4 位數字）'); if(np==null) return; np=(np||'').trim();
-    if(!/^\d{4,}$/.test(np)){ alert('請輸入至少 4 位數字'); return; }
-    var c=prompt('再輸入一次新 PIN'); if(c==null) return;
-    if((c||'').trim()!==np){ alert('兩次不一致'); return; }
-    save(PIN_KEY, P.hashPin(np)); toast(cur?'PIN 已更新':'PIN 已設定'); renderData();
   }
 
   // ---------- chrome ----------
@@ -700,12 +667,8 @@ if (typeof document !== 'undefined') {
     w.appendChild(el('div',{class:'card'},[ el('h3',{text:'列印標籤'}),
       el('p',{class:'small muted',text:'印出「編號＋售價」貼在 CD 上，現場幫手靠編號秒找。'}),
       el('button',{class:'btn-gold',style:'width:100%',onclick:printLabels},['開啟標籤列印頁']) ]));
-    w.appendChild(el('div',{class:'card'},[ el('h3',{text:'安全'}),
-      el('p',{class:'small muted',text:'老闆 PIN 保護成本與會計，每次進入老闆模式都要輸入。'}),
-      el('div',{class:'row'},[
-        el('button',{class:'btn-ghost',onclick:changePin},[ls(PIN_KEY)?'更改 PIN':'設定 PIN']),
-        el('button',{class:'btn-ghost',onclick:function(){if(confirm('切換角色？資料留著。')){role=null;ownerAuthed=false;save(ROLE_KEY,null);boot();}}},['切換角色'])
-      ]) ]));
+    w.appendChild(el('div',{class:'card'},[
+      el('button',{class:'btn-ghost',style:'width:100%',onclick:function(){if(confirm('切換角色？資料留著。')){role=null;ownerAuthed=false;save(ROLE_KEY,null);boot();}}},['切換角色']) ]));
     app.appendChild(w);
   }
   function printLabels(){
