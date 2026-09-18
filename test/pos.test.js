@@ -84,6 +84,31 @@ eq('costOf 有值', P.costOf('120'), 120);
   eq('maxCodeNum 取最大', P.maxCodeNum([{code:'A001'},{code:'A007'},{code:'B999'},{code:''}], 'A'), 7);
 })();
 
+// 4d. parseBulk：批量貼上（Tab/逗號、標題略過、空成本 null、數字轉型、版本）
+(function () {
+  const tsv = '藝人\t專輯\t售價\t成本\t版本\n'
+            + 'Nirvana\tIn Utero\t350\t120\t日盤\n'
+            + 'Radiohead\tOK Computer\t400\n'   // 無成本、無版本
+            + '\n'                               // 空列
+            + 'Sade\tLove Deluxe\t250\t\t英版';  // 成本欄留空但有版本
+  const rows = P.parseBulk(tsv);
+  eq('parseBulk 略過標題+空列，得 3 筆', rows.length, 3);
+  eq('第一筆藝人', rows[0].artist, 'Nirvana');
+  eq('售價轉數字', rows[0].price, 350);
+  ok('售價型別 number', typeof rows[0].price === 'number');
+  eq('成本 120', rows[0].cost, 120);
+  eq('版本 日盤', rows[0].version, '日盤');
+  eq('無成本欄→null', rows[1].cost, null);
+  eq('成本欄留空→null(非0)', rows[2].cost, null);
+  eq('留空成本仍讀到版本', rows[2].version, '英版');
+  // 逗號格式
+  const csv = 'Oasis,Definitely Maybe,300';
+  const r2 = P.parseBulk(csv);
+  eq('逗號格式 1 筆', r2.length, 1);
+  eq('逗號格式售價', r2[0].price, 300);
+  eq('批量預設勾選', r2[0].include, true);
+})();
+
 // 4c. mergeImport：再匯入只加新的(srcId 沒見過)，既有編號/編輯完全保留
 (function () {
   const existing = [{ srcId: 'x1', code: 'A001', artist: '已編輯' }, { srcId: '', artist: '手動品' }];

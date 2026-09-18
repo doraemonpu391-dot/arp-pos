@@ -143,6 +143,26 @@
     return { items: existing.concat(add), added: add.length, skipped: incoming.length - add.length };
   }
 
+  // 批量貼上：一行一筆，欄位順序 藝人 專輯 售價 成本(選填) 版本(選填)；Tab 優先，否則逗號
+  function parseBulk(text){
+    var lines = String(text==null?'':text).split(/\r?\n/), out=[];
+    lines.forEach(function(line){
+      if(!line.trim()) return;
+      var cols = (line.indexOf('\t')>=0 ? line.split('\t') : line.split(',')).map(function(c){return (c||'').trim();});
+      var artist=cols[0]||'', album=cols[1]||'';
+      if(!artist && !album) return;                                  // 空列略過
+      if(out.length===0 && /^(藝人|artist)$/i.test(artist)) return;   // 首列若是標題就略過
+      out.push({
+        artist:artist, album:album,
+        price:num(cols[2]),
+        cost:(cols[3]==null||cols[3]==='')?null:num(cols[3]),        // 成本空＝未知
+        version:cols[4]||'',
+        include:true, source:'bulk'
+      });
+    });
+    return out;
+  }
+
   function calcCart(lines){ return (lines||[]).reduce(function(s,l){return s+num(l.price);},0); }
 
   // 組合價「任選 N 張 = Y 元」：貴的優先成組，剩下的照單價
@@ -216,7 +236,7 @@
   }
 
   g.POS = { num:num, costOf:costOf, parseDataJson:parseDataJson, assignCodes:assignCodes,
-    maxCodeNum:maxCodeNum, mergeImport:mergeImport, calcCart:calcCart, bundleDiscount:bundleDiscount,
+    maxCodeNum:maxCodeNum, mergeImport:mergeImport, parseBulk:parseBulk, calcCart:calcCart, bundleDiscount:bundleDiscount,
     applyDiscount:applyDiscount, soldCodes:soldCodes, checkOwnerPin:checkOwnerPin,
     buildHelperPackage:buildHelperPackage, computeAccounting:computeAccounting };
 })(typeof globalThis!=='undefined'?globalThis:this);
@@ -465,6 +485,7 @@ if (typeof document !== 'undefined') {
       el('p',{class:'small muted',html:'流程：先把貨加齊（匯入只帶「在售/保留中」，已售出/已下架不進來；再次匯入只<b>加新的</b>、不動舊資料），全部加完再按 <b>編號</b>——只補未編號的，已編號的不會被覆蓋。'}),
       el('div',{class:'row'},[
         el('button',{class:'btn-ghost btn-sm',onclick:importData},['匯入 / 合併 data.json']),
+        el('button',{class:'btn-primary btn-sm',onclick:bulkImport},['批量貼上匯入']),
         el('button',{class:'btn-ghost btn-sm',onclick:addManual},['＋ 手動新增']),
       ]),
       el('div',{class:'row',style:'margin-top:8px'},[
@@ -515,6 +536,20 @@ if (typeof document !== 'undefined') {
     function renumberAll(){ if(!confirm('會把所有要賣的商品重新連號（前綴 '+O.prefix+'）。\n若已印過標籤，重編會對不上，請勿使用。\n確定重編？')) return;
       O.items=P.assignCodes(O.items,O.prefix,true); saveO(); toast('已重新編號'); renderCatalog(); }
     function addManual(){ O.items.unshift({code:'',artist:'',album:'',version:'',price:0,cost:null,include:true,source:'manual'}); saveO(); editItem(0); }
+    function bulkImport(){
+      var ta=el('textarea',{rows:'9',placeholder:'從試算表複製整段貼上，或每行一筆：\nNirvana\tIn Utero\t350\t120\t日盤\nRadiohead\tOK Computer\t400\n（欄位：藝人  專輯  售價  成本(選填)  版本(選填)）',style:'width:100%;font-size:14px;line-height:1.5'});
+      var info=el('p',{class:'small muted',style:'margin-top:6px'});
+      ta.addEventListener('input',function(){ info.textContent='偵測到 '+P.parseBulk(ta.value).length+' 筆'; });
+      modal('批量貼上匯入',[
+        el('p',{class:'small muted',text:'欄位順序：藝人 → 專輯 → 售價 → 成本(選填) → 版本(選填)。建議從 Excel／試算表複製（Tab 分隔最準；逗號分隔時專輯名不能含逗號）。匯入後記得按「編號」。'}),
+        ta, info
+      ], function(){
+        var items=P.parseBulk(ta.value);
+        if(!items.length){ alert('沒有解析到資料'); return; }
+        O.items=O.items.concat(items); saveO();
+        toast('已新增 '+items.length+' 筆，記得按「編號」'); renderCatalog();
+      }, null, '匯入');
+    }
   }
 
   function editItem(i){
